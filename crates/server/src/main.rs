@@ -24,6 +24,7 @@ async fn main() {
 
     let app = Router::new()
         .route("/health", get(health_handler))
+        .nest("/auth", auth::router())
         .with_state(state)
         .layer(CorsLayer::permissive());
 
