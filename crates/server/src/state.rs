@@ -1,16 +1,14 @@
 use std::sync::Arc;
-use crate::config::Config;
-use crate::store::memory::InMemoryStore;
+use crate::{config::Config, store::Store};
 
 #[derive(Clone)]
-#[allow(dead_code)]
 pub struct AppState {
     pub config: Arc<Config>,
-    pub store: Arc<InMemoryStore>,
+    pub store: Arc<dyn Store>,
 }
 
 impl AppState {
-    pub fn new(config: Config, store: InMemoryStore) -> Self {
+    pub fn new(config: Config, store: impl Store + 'static) -> Self {
         Self {
             config: Arc::new(config),
             store: Arc::new(store),
