@@ -1,6 +1,8 @@
 pub mod auth;
 pub mod config;
 pub mod error;
+pub mod rooms;
+pub mod signaling;
 pub mod state;
 pub mod store;
 
@@ -14,9 +16,14 @@ pub fn create_app() -> Router {
     let config = config::Config::from_env();
     let store = InMemoryStore::default();
     let state = AppState::new(config, store);
+    build_router(state)
+}
+
+pub fn build_router(state: AppState) -> Router {
     Router::new()
         .route("/health", get(health_handler))
         .nest("/auth", auth::router())
+        .nest("/rooms", rooms::router())
         .with_state(state)
         .layer(CorsLayer::permissive())
 }

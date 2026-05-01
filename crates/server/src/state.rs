@@ -1,11 +1,12 @@
 use std::sync::Arc;
-use crate::{config::Config, store::Store};
+
+use crate::{config::Config, rooms::registry::RoomRegistry, store::Store};
 
 #[derive(Clone)]
-#[allow(dead_code)] // fields used in Tasks 8-14
 pub struct AppState {
     pub config: Arc<Config>,
     pub store: Arc<dyn Store>,
+    pub registry: Arc<RoomRegistry>,
 }
 
 impl AppState {
@@ -13,6 +14,7 @@ impl AppState {
         Self {
             config: Arc::new(config),
             store: Arc::new(store),
+            registry: Arc::new(RoomRegistry::default()),
         }
     }
 }
