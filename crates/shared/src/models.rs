@@ -14,11 +14,25 @@ pub struct PeerId(pub Uuid);
 impl UserId {
     pub fn new() -> Self { Self(Uuid::new_v4()) }
 }
+
+impl Default for UserId {
+    fn default() -> Self { Self::new() }
+}
+
 impl RoomId {
     pub fn new() -> Self { Self(Uuid::new_v4()) }
 }
+
+impl Default for RoomId {
+    fn default() -> Self { Self::new() }
+}
+
 impl PeerId {
     pub fn new() -> Self { Self(Uuid::new_v4()) }
+}
+
+impl Default for PeerId {
+    fn default() -> Self { Self::new() }
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
