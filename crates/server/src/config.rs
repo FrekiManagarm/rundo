@@ -1,10 +1,7 @@
-// crates/server/src/config.rs
 #[derive(Debug, Clone)]
 pub struct Config {
     pub http_port: u16,
-    #[allow(dead_code)]
     pub udp_media_port: u16,
-    #[allow(dead_code)]
     pub jwt_secret: String,
 }
 

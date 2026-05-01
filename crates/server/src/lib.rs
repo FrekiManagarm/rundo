@@ -3,6 +3,7 @@ pub mod config;
 pub mod error;
 pub mod rooms;
 pub mod signaling;
+pub mod sfu;
 pub mod state;
 pub mod store;
 
@@ -12,10 +13,10 @@ use state::AppState;
 use store::memory::InMemoryStore;
 use tower_http::cors::CorsLayer;
 
-pub fn create_app() -> Router {
+pub async fn create_app() -> Router {
     let config = config::Config::from_env();
     let store = InMemoryStore::default();
-    let state = AppState::new(config, store);
+    let state = AppState::new(config, store).await.expect("failed to initialize SFU state");
     build_router(state)
 }
 
