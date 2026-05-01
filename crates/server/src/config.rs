@@ -1,14 +1,14 @@
 // crates/server/src/config.rs
 #[derive(Debug, Clone)]
-#[allow(dead_code)]
 pub struct Config {
     pub http_port: u16,
+    #[allow(dead_code)]
     pub udp_media_port: u16,
+    #[allow(dead_code)]
     pub jwt_secret: String,
 }
 
 impl Config {
-    #[allow(dead_code)]
     pub fn from_env() -> Self {
         Self {
             http_port: std::env::var("HTTP_PORT")

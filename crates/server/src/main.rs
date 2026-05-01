@@ -3,5 +3,6 @@ mod error;
 
 #[tokio::main]
 async fn main() {
-    println!("WebRTC server starting…");
+    let _config = config::Config::from_env();
+    println!("WebRTC server starting on port {}…", _config.http_port);
 }
