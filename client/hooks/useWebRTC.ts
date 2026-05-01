@@ -21,19 +21,23 @@ export interface RemoteStream {
 export function useWebRTC(roomId: string) {
   const wsRef = useRef<WebSocket | null>(null);
   const pcRef = useRef<RTCPeerConnection | null>(null);
+  const localStreamRef = useRef<MediaStream | null>(null);
   const [localStream, setLocalStream] = useState<MediaStream | null>(null);
   const [remoteStreams, setRemoteStreams] = useState<RemoteStream[]>([]);
   const [connected, setConnected] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
+  // Stable callback — uses refs so it never changes and the useEffect cleanup
+  // doesn't fire mid-connection when localStream state updates.
   const disconnect = useCallback(() => {
     wsRef.current?.close();
     pcRef.current?.close();
-    localStream?.getTracks().forEach((t) => t.stop());
+    localStreamRef.current?.getTracks().forEach((t) => t.stop());
+    localStreamRef.current = null;
     setConnected(false);
     setLocalStream(null);
     setRemoteStreams([]);
-  }, [localStream]);
+  }, []);
 
   const connect = useCallback(async () => {
     try {
@@ -41,6 +45,7 @@ export function useWebRTC(roomId: string) {
         video: true,
         audio: true,
       });
+      localStreamRef.current = stream;
       setLocalStream(stream);
 
       const token = storage.getToken();
