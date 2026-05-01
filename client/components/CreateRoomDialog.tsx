@@ -61,7 +61,9 @@ export function CreateRoomDialog({ onCreated }: Props) {
             <select
               id="room-kind"
               value={kind}
-              onChange={(e) => setKind(e.target.value as "conference" | "stream")}
+              onChange={(e) =>
+                setKind(e.target.value as "conference" | "stream")
+              }
               className="w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
             >
               <option value="conference">Conference</option>
