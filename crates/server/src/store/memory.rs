@@ -4,7 +4,6 @@ use shared::models::{Room, RoomId, User, UserId};
 use crate::store::Store;
 
 #[derive(Default)]
-#[allow(dead_code)]
 pub struct InMemoryStore {
     users_by_id: DashMap<UserId, User>,
     users_by_email: DashMap<String, UserId>,
