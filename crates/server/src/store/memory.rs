@@ -1,4 +1,5 @@
 use anyhow::Result;
+use async_trait::async_trait;
 use dashmap::DashMap;
 use shared::models::{Room, RoomId, User, UserId};
 use crate::store::Store;
@@ -11,6 +12,7 @@ pub struct InMemoryStore {
     rooms: DashMap<RoomId, Room>,
 }
 
+#[async_trait]
 impl Store for InMemoryStore {
     async fn create_user(&self, user: User) -> Result<()> {
         self.users_by_email.insert(user.email.clone(), user.id);

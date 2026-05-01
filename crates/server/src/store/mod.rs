@@ -1,9 +1,11 @@
 pub mod memory;
 
 use anyhow::Result;
+use async_trait::async_trait;
 use shared::models::{Room, RoomId, User, UserId};
 
-#[allow(async_fn_in_trait, dead_code)]
+#[async_trait]
+#[allow(dead_code)]
 pub trait Store: Send + Sync {
     async fn create_user(&self, user: User) -> Result<()>;
     async fn get_user_by_email(&self, email: &str) -> Option<User>;

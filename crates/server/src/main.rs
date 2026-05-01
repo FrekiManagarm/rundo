@@ -3,7 +3,7 @@ mod error;
 mod state;
 mod store;
 
-use axum::{routing::get, Json, Router};
+use axum::{extract::State, routing::get, Json, Router};
 use serde_json::json;
 use state::AppState;
 use store::memory::InMemoryStore;
@@ -32,6 +32,7 @@ async fn main() {
     axum::serve(listener, app).await.unwrap();
 }
 
-async fn health_handler() -> Json<serde_json::Value> {
-    Json(json!({ "status": "ok" }))
+async fn health_handler(State(state): State<AppState>) -> Json<serde_json::Value> {
+    let room_count = state.store.list_rooms().await.len();
+    Json(json!({ "status": "ok", "rooms": room_count }))
 }
