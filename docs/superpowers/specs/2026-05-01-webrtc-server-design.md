@@ -257,6 +257,7 @@ enum AppError {
 **Next.js (client) :**
 - TypeScript + App Router
 - Tailwind CSS — styling
+- shadcn/ui — composants UI (Button, Card, Dialog, Input, Badge...)
 - WebRTC browser API (natif, pas de lib tierce)
 
 ---
