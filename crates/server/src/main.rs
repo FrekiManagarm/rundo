@@ -1,5 +1,6 @@
 mod config;
 mod error;
+mod store;
 
 #[tokio::main]
 async fn main() {
