@@ -16,6 +16,8 @@ pub enum AppError {
     Forbidden,
     #[error("not found: {0}")]
     NotFound(String),
+    #[error("conflict: {0}")]
+    Conflict(String),
     #[error("room is full")]
     RoomFull,
     #[error("internal error: {0}")]
@@ -28,6 +30,7 @@ impl IntoResponse for AppError {
             AppError::Unauthorized => (StatusCode::UNAUTHORIZED, "unauthorized", self.to_string()),
             AppError::Forbidden => (StatusCode::FORBIDDEN, "forbidden", self.to_string()),
             AppError::NotFound(msg) => (StatusCode::NOT_FOUND, "not_found", msg.clone()),
+            AppError::Conflict(msg) => (StatusCode::CONFLICT, "conflict", msg.clone()),
             AppError::RoomFull => (StatusCode::CONFLICT, "room_full", self.to_string()),
             AppError::Internal(_) => (
                 StatusCode::INTERNAL_SERVER_ERROR,
@@ -75,6 +78,12 @@ mod tests {
     #[test]
     fn room_full_returns_409() {
         let resp = AppError::RoomFull.into_response();
+        assert_eq!(resp.status(), StatusCode::CONFLICT);
+    }
+
+    #[test]
+    fn conflict_returns_409() {
+        let resp = AppError::Conflict("email exists".to_string()).into_response();
         assert_eq!(resp.status(), StatusCode::CONFLICT);
     }
 }

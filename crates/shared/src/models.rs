@@ -46,6 +46,7 @@ pub enum RoomKind {
 pub struct User {
     pub id: UserId,
     pub email: String,
+    #[serde(skip_serializing)]
     pub password_hash: String,
     pub created_at: DateTime<Utc>,
 }

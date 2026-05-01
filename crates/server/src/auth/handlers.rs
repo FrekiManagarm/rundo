@@ -35,7 +35,7 @@ pub async fn register(
     Json(body): Json<RegisterRequest>,
 ) -> AppResult<(StatusCode, Json<AuthResponse>)> {
     if state.store.get_user_by_email(&body.email).await.is_some() {
-        return Err(AppError::NotFound("email already registered".to_string()));
+        return Err(AppError::Conflict("email already registered".to_string()));
     }
     let password_hash = hash_password(&body.password).map_err(AppError::Internal)?;
     let user = User {
@@ -44,13 +44,9 @@ pub async fn register(
         password_hash,
         created_at: Utc::now(),
     };
-    let token = encode_jwt(user.id, &state.config.jwt_secret).map_err(AppError::Internal)?;
     let user_id = user.id;
-    state
-        .store
-        .create_user(user)
-        .await
-        .map_err(AppError::Internal)?;
+    state.store.create_user(user).await.map_err(AppError::Internal)?;
+    let token = encode_jwt(user_id, &state.config.jwt_secret).map_err(AppError::Internal)?;
     Ok((StatusCode::CREATED, Json(AuthResponse { token, user_id })))
 }
 
