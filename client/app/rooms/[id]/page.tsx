@@ -1,12 +1,13 @@
 "use client";
 
-import { use, useEffect } from "react";
+import { use, useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { storage } from "@/lib/storage";
+import { roomsApi } from "@/lib/api";
 import { useWebRTC } from "@/hooks/useWebRTC";
 import { VideoGrid } from "@/components/VideoGrid";
 import { Button } from "@/components/ui/button";
-import { Badge } from "@/components/ui/badge";
+import { ChevronLeft, Mic, MicOff, Monitor, MonitorOff, Video, VideoOff } from "lucide-react";
 
 interface PageProps {
   params: Promise<{ id: string }>;
@@ -15,52 +16,136 @@ interface PageProps {
 export default function RoomPage({ params }: PageProps) {
   const { id: roomId } = use(params);
   const router = useRouter();
-  const { localStream, remoteStreams, connected, error, connect, disconnect } =
+  const [roomError, setRoomError] = useState<string | null>(null);
+  const { localStream, remoteStreams, connected, isScreenSharing, error, connect, disconnect, startScreenShare, stopScreenShare } =
     useWebRTC(roomId);
 
   useEffect(() => {
     if (!storage.getToken()) {
       router.push("/login");
+      return;
     }
-  }, [router]);
+    roomsApi.get(roomId).catch(() => {
+      setRoomError(
+        "Room not found. It may have been deleted or the server was restarted."
+      );
+    });
+  }, [roomId, router]);
 
   function handleLeave() {
     disconnect();
     router.push("/rooms");
   }
 
+  const participantCount = (localStream ? 1 : 0) + remoteStreams.length;
+
   return (
-    <main className="flex min-h-screen flex-col p-4 gap-4">
-      <div className="flex items-center justify-between">
-        <div className="flex items-center gap-2">
-          <h1 className="text-xl font-semibold">Room</h1>
-          <Badge variant={connected ? "default" : "secondary"}>
-            {connected ? "Live" : "Disconnected"}
-          </Badge>
-        </div>
-        <div className="flex gap-2">
-          {!localStream ? (
-            <Button onClick={connect}>Join</Button>
-          ) : (
-            <Button variant="destructive" onClick={disconnect}>
-              Mute / Stop camera
-            </Button>
+    <div className="flex flex-col min-h-screen bg-background">
+      <div className="absolute top-0 left-0 right-0 h-px bg-gradient-to-r from-transparent via-primary/40 to-transparent" />
+
+      <header className="flex-shrink-0 flex items-center justify-between px-5 py-3.5 border-b border-border/50 bg-background/95 backdrop-blur-sm sticky top-0 z-10">
+        <div className="flex items-center gap-3">
+          <button
+            onClick={handleLeave}
+            className="flex items-center gap-1 text-muted-foreground hover:text-foreground transition-colors text-sm"
+          >
+            <ChevronLeft className="w-4 h-4" />
+            <span className="font-black text-lg tracking-tight text-primary">
+              rundo
+            </span>
+          </button>
+
+          <div className="w-px h-4 bg-border" />
+
+          <div className="flex items-center gap-2">
+            <span className="text-sm font-semibold text-foreground">Room</span>
+            <div
+              className={`flex items-center gap-1.5 px-2 py-0.5 rounded-full text-[11px] font-mono font-semibold tracking-wider ${
+                connected
+                  ? "bg-emerald-500/15 text-emerald-400"
+                  : "bg-muted text-muted-foreground"
+              }`}
+            >
+              <span
+                className={`w-1.5 h-1.5 rounded-full ${
+                  connected ? "bg-emerald-400 animate-pulse-live" : "bg-muted-foreground/50"
+                }`}
+              />
+              {connected ? "LIVE" : "OFFLINE"}
+            </div>
+          </div>
+
+          {participantCount > 0 && (
+            <span className="text-xs text-muted-foreground font-mono">
+              {participantCount} in room
+            </span>
           )}
-          <Button variant="outline" onClick={handleLeave}>
+        </div>
+
+        <div className="flex items-center gap-2">
+          {!localStream ? (
+            <Button
+              onClick={connect}
+              disabled={!!roomError}
+              size="sm"
+              className="gap-2 font-semibold"
+            >
+              <Video className="w-3.5 h-3.5" />
+              Join
+            </Button>
+          ) : (
+            <>
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={disconnect}
+                className="gap-2 border-border/60 hover:border-muted-foreground/30"
+              >
+                {localStream ? (
+                  <MicOff className="w-3.5 h-3.5" />
+                ) : (
+                  <Mic className="w-3.5 h-3.5" />
+                )}
+                Mute
+              </Button>
+              <Button
+                variant={isScreenSharing ? "destructive" : "outline"}
+                size="sm"
+                onClick={isScreenSharing ? stopScreenShare : startScreenShare}
+                className="gap-2 border-border/60 hover:border-muted-foreground/30"
+              >
+                {isScreenSharing ? (
+                  <MonitorOff className="w-3.5 h-3.5" />
+                ) : (
+                  <Monitor className="w-3.5 h-3.5" />
+                )}
+                {isScreenSharing ? "Stop Sharing" : "Share Screen"}
+              </Button>
+            </>
+          )}
+          <Button
+            variant="ghost"
+            size="sm"
+            onClick={handleLeave}
+            className="text-muted-foreground hover:text-destructive hover:bg-destructive/10 gap-2"
+          >
+            <VideoOff className="w-3.5 h-3.5" />
             Leave
           </Button>
         </div>
-      </div>
+      </header>
 
-      {error && (
-        <p className="text-sm text-destructive border border-destructive/30 rounded p-2">
-          {error}
-        </p>
+      {(roomError ?? error) && (
+        <div className="mx-5 mt-4 flex-shrink-0">
+          <div className="text-sm text-destructive bg-destructive/10 border border-destructive/25 rounded-xl px-4 py-3">
+            {roomError ?? error}
+          </div>
+        </div>
       )}
 
-      <div className="flex-1">
-        <VideoGrid localStream={localStream} remoteStreams={remoteStreams} />
+      <div className="flex-1 p-5">
+        <VideoGrid localStream={localStream} remoteStreams={remoteStreams} isScreenSharing={isScreenSharing} />
       </div>
-    </main>
+    </div>
   );
 }

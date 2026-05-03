@@ -37,9 +37,14 @@ impl FromRequestParts<AppState> for AuthUser {
 
         let jwt_secret = state.config.jwt_secret.clone();
         async move {
-            let token = token.ok_or(AppError::Unauthorized)?;
-            let claims =
-                decode_jwt(&token, &jwt_secret).map_err(|_| AppError::Unauthorized)?;
+            let token = token.ok_or_else(|| {
+                tracing::warn!("AuthUser: no token found in Authorization header or ?token= param");
+                AppError::Unauthorized
+            })?;
+            let claims = decode_jwt(&token, &jwt_secret).map_err(|e| {
+                tracing::warn!("AuthUser: JWT decode failed: {e}");
+                AppError::Unauthorized
+            })?;
             Ok(AuthUser(claims.sub))
         }
     }

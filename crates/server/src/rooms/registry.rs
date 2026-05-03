@@ -1,34 +1,35 @@
 use dashmap::DashMap;
-use shared::models::{PeerId, PeerInfo, Room, RoomId};
-use std::collections::HashMap;
+use shared::{
+    messages::ServerMessage,
+    models::{PeerInfo, Room, RoomId},
+};
+use std::sync::{
+    atomic::{AtomicUsize, Ordering},
+    Arc,
+};
 use tokio::sync::mpsc;
+
+use shared::models::PeerId;
 
 #[derive(Debug)]
 pub enum RoomCommand {
     PeerJoined {
         peer_id: PeerId,
         info: PeerInfo,
-        rtp_tx: mpsc::Sender<RtpPayload>,
+        ws_tx: mpsc::Sender<ServerMessage>,
     },
     PeerLeft {
         peer_id: PeerId,
     },
-    MediaData {
-        from: PeerId,
-        payload: RtpPayload,
+    Relay {
+        to: PeerId,
+        msg: ServerMessage,
     },
-}
-
-#[derive(Debug, Clone)]
-pub struct RtpPayload {
-    pub data: Vec<u8>,
-    pub timestamp: u32,
-    pub payload_type: u8,
 }
 
 pub struct RoomHandle {
     pub room: Room,
-    pub peers: HashMap<PeerId, PeerInfo>,
+    pub peer_count: Arc<AtomicUsize>,
     pub cmd_tx: mpsc::Sender<RoomCommand>,
 }
 
@@ -38,11 +39,13 @@ pub struct RoomRegistry {
 }
 
 impl RoomRegistry {
-    pub fn insert(&self, room: Room, cmd_tx: mpsc::Sender<RoomCommand>) {
+    pub fn insert(&self, room: Room, cmd_tx: mpsc::Sender<RoomCommand>) -> Arc<AtomicUsize> {
+        let peer_count = Arc::new(AtomicUsize::new(0));
         self.rooms.insert(
             room.id,
-            RoomHandle { room, peers: HashMap::new(), cmd_tx },
+            RoomHandle { room, peer_count: peer_count.clone(), cmd_tx },
         );
+        peer_count
     }
 
     pub fn get_room_meta(&self, id: RoomId) -> Option<Room> {
@@ -62,6 +65,6 @@ impl RoomRegistry {
     }
 
     pub fn peer_count(&self, id: RoomId) -> usize {
-        self.rooms.get(&id).map(|h| h.peers.len()).unwrap_or(0)
+        self.rooms.get(&id).map(|h| h.peer_count.load(Ordering::Relaxed)).unwrap_or(0)
     }
 }

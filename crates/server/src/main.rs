@@ -10,7 +10,7 @@ async fn main() {
     let config = server::config::Config::from_env();
     tracing::info!("Listening on 0.0.0.0:{}", config.http_port);
     tracing::info!("UDP media port: {}", config.udp_media_port);
-    let addr = format!("0.0.0.0:{}", config.http_port);
+    let addr = format!("[::]:{}", config.http_port);
     let app = server::create_app().await;
     let listener = tokio::net::TcpListener::bind(&addr).await.unwrap();
     axum::serve(listener, app).await.unwrap();

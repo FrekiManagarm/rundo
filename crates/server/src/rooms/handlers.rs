@@ -52,11 +52,14 @@ pub async fn create_room(
         owner_id: user_id,
         created_at: Utc::now(),
     };
-    state.store.create_room(room.clone()).await.map_err(AppError::Internal)?;
+    state.store.create_room(room.clone()).await.map_err(|e| {
+        tracing::error!("create_room db error: {e}");
+        AppError::Internal(e)
+    })?;
 
     let (cmd_tx, cmd_rx) = tokio::sync::mpsc::channel(256);
-    state.registry.insert(room.clone(), cmd_tx);
-    tokio::spawn(crate::rooms::room::run_room(room.id, cmd_rx));
+    let peer_counter = state.registry.insert(room.clone(), cmd_tx);
+    tokio::spawn(crate::rooms::room::run_room(room.id, cmd_rx, peer_counter));
 
     Ok((StatusCode::CREATED, Json(RoomResponse::from_room(room, 0))))
 }

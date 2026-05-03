@@ -1,0 +1,21 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(xargs cat *)",
+      "Bash(cat)",
+      "Bash(rustc /tmp/test_sign.rs -o /tmp/test_sign)",
+      "Bash(/tmp/test_sign)",
+      "Bash(python3 -c ' *)",
+      "Bash(ps -p 6235 -o lstart,command)",
+      "Bash(git -C /Users/mathieuchambaud/Documents/Perso-Projects/rundo log --oneline --format=\"%h %ai %s\")",
+      "Bash(cargo build *)",
+      "Bash(cargo test *)",
+      "Bash(rm /Users/mathieuchambaud/Documents/Perso-Projects/rundo/crates/server/src/rooms/peer.rs /Users/mathieuchambaud/Documents/Perso-Projects/rundo/crates/server/src/sfu/mod.rs /Users/mathieuchambaud/Documents/Perso-Projects/rundo/crates/server/src/sfu/udp.rs)",
+      "Bash(rmdir /Users/mathieuchambaud/Documents/Perso-Projects/rundo/crates/server/src/sfu)",
+      "Bash(npx tsc *)"
+    ]
+  },
+  "enabledMcpjsonServers": [
+    "claude-flow"
+  ]
+}

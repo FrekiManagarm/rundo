@@ -1,5 +1,4 @@
 pub mod handlers;
-pub mod peer;
 pub mod registry;
 pub mod room;
 
