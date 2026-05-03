@@ -7,7 +7,7 @@ import { roomsApi } from "@/lib/api";
 import { useWebRTC } from "@/hooks/useWebRTC";
 import { VideoGrid } from "@/components/VideoGrid";
 import { Button } from "@/components/ui/button";
-import { ChevronLeft, Mic, MicOff, Monitor, MonitorOff, Video, VideoOff } from "lucide-react";
+import { ChevronLeft, Mic, MicOff, Monitor, MonitorOff, Video, VideoOff, Camera, CameraOff } from "lucide-react";
 
 interface PageProps {
   params: Promise<{ id: string }>;
@@ -17,7 +17,7 @@ export default function RoomPage({ params }: PageProps) {
   const { id: roomId } = use(params);
   const router = useRouter();
   const [roomError, setRoomError] = useState<string | null>(null);
-  const { localStream, remoteStreams, connected, isScreenSharing, error, connect, disconnect, startScreenShare, stopScreenShare } =
+  const { localStream, remoteStreams, connected, isScreenSharing, isMuted, isCameraOff, error, connect, disconnect, toggleMic, toggleCamera, startScreenShare, stopScreenShare } =
     useWebRTC(roomId);
 
   useEffect(() => {
@@ -96,17 +96,30 @@ export default function RoomPage({ params }: PageProps) {
           ) : (
             <>
               <Button
-                variant="outline"
+                variant={isMuted ? "destructive" : "outline"}
                 size="sm"
-                onClick={disconnect}
+                onClick={toggleMic}
                 className="gap-2 border-border/60 hover:border-muted-foreground/30"
               >
-                {localStream ? (
+                {isMuted ? (
                   <MicOff className="w-3.5 h-3.5" />
                 ) : (
                   <Mic className="w-3.5 h-3.5" />
                 )}
-                Mute
+                {isMuted ? "Unmute" : "Mute"}
+              </Button>
+              <Button
+                variant={isCameraOff ? "destructive" : "outline"}
+                size="sm"
+                onClick={toggleCamera}
+                className="gap-2 border-border/60 hover:border-muted-foreground/30"
+              >
+                {isCameraOff ? (
+                  <CameraOff className="w-3.5 h-3.5" />
+                ) : (
+                  <Camera className="w-3.5 h-3.5" />
+                )}
+                {isCameraOff ? "Show Camera" : "Hide Camera"}
               </Button>
               <Button
                 variant={isScreenSharing ? "destructive" : "outline"}

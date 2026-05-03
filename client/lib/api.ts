@@ -43,7 +43,21 @@ export const authApi = {
   register: (body: RegisterRequest) =>
     api.post<AuthResponse>("/auth/register", body),
   login: (body: LoginRequest) =>
-    api.post<AuthResponse>("/auth/token", body),
+    api.post<AuthResponse>("/auth/login", body),
+};
+
+export interface IceServer {
+  urls: string[];
+  username?: string;
+  credential?: string;
+}
+
+export interface IceConfig {
+  ice_servers: IceServer[];
+}
+
+export const iceConfigApi = {
+  get: () => api.get<IceConfig>("/ice-config"),
 };
 
 export const roomsApi = {

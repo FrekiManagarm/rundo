@@ -37,7 +37,7 @@ pub async fn register(
     if state.store.get_user_by_email(&body.email).await.is_some() {
         return Err(AppError::Conflict("email already registered".to_string()));
     }
-    let password_hash = hash_password(&body.password).map_err(AppError::Internal)?;
+    let password_hash = hash_password(body.password).await.map_err(AppError::Internal)?;
     let user = User {
         id: UserId::new(),
         email: body.email,
@@ -59,8 +59,9 @@ pub async fn login(
         .get_user_by_email(&body.email)
         .await
         .ok_or(AppError::Unauthorized)?;
-    let valid =
-        verify_password(&body.password, &user.password_hash).map_err(AppError::Internal)?;
+    let valid = verify_password(body.password, user.password_hash)
+        .await
+        .map_err(AppError::Internal)?;
     if !valid {
         return Err(AppError::Unauthorized);
     }

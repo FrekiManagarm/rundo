@@ -10,5 +10,5 @@ use crate::state::AppState;
 pub fn router() -> Router<AppState> {
     Router::new()
         .route("/register", post(handlers::register))
-        .route("/token", post(handlers::login))
+        .route("/login", post(handlers::login))
 }

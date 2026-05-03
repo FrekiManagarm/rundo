@@ -12,7 +12,11 @@
       "Bash(cargo test *)",
       "Bash(rm /Users/mathieuchambaud/Documents/Perso-Projects/rundo/crates/server/src/rooms/peer.rs /Users/mathieuchambaud/Documents/Perso-Projects/rundo/crates/server/src/sfu/mod.rs /Users/mathieuchambaud/Documents/Perso-Projects/rundo/crates/server/src/sfu/udp.rs)",
       "Bash(rmdir /Users/mathieuchambaud/Documents/Perso-Projects/rundo/crates/server/src/sfu)",
-      "Bash(npx tsc *)"
+      "Bash(npx tsc *)",
+      "Bash(DATABASE_URL=\"sqlite:rundo.db\" cargo run -p server)",
+      "Bash(kill %1)",
+      "Bash(wait)",
+      "Bash(DATABASE_URL=\"sqlite://rundo.db\" cargo run -p server)"
     ]
   },
   "enabledMcpjsonServers": [

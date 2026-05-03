@@ -1,12 +1,14 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState } from "react";
+import { iceConfigApi } from "@/lib/api";
 import { storage } from "@/lib/storage";
 
 const WS_URL = process.env.NEXT_PUBLIC_WS_URL ?? "ws://localhost:4000";
-const ICE_CONFIG: RTCConfiguration = {
-  iceServers: [{ urls: "stun:stun.l.google.com:19302" }],
-};
+
+const FALLBACK_ICE_SERVERS: RTCIceServer[] = [
+  { urls: "stun:stun.l.google.com:19302" },
+];
 
 interface ServerMessage {
   type: string;
@@ -29,11 +31,16 @@ export function useWebRTC(roomId: string) {
   const screenTrackRef = useRef<MediaStreamTrack | null>(null);
   const pcsRef = useRef<Map<string, RTCPeerConnection>>(new Map());
   const remoteStreamsMapRef = useRef<Map<string, MediaStream>>(new Map());
+  const iceServersRef = useRef<RTCIceServer[]>(FALLBACK_ICE_SERVERS);
+  // Timers for delayed ICE restart on "disconnected" state
+  const iceRestartTimersRef = useRef<Map<string, ReturnType<typeof setTimeout>>>(new Map());
 
   const [localStream, setLocalStream] = useState<MediaStream | null>(null);
   const [remoteStreams, setRemoteStreams] = useState<RemoteStream[]>([]);
   const [connected, setConnected] = useState(false);
   const [isScreenSharing, setIsScreenSharing] = useState(false);
+  const [isMuted, setIsMuted] = useState(false);
+  const [isCameraOff, setIsCameraOff] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   const syncRemoteStreams = useCallback(() => {
@@ -47,6 +54,8 @@ export function useWebRTC(roomId: string) {
 
   const removePeer = useCallback(
     (peerId: string) => {
+      clearTimeout(iceRestartTimersRef.current.get(peerId));
+      iceRestartTimersRef.current.delete(peerId);
       pcsRef.current.get(peerId)?.close();
       pcsRef.current.delete(peerId);
       remoteStreamsMapRef.current.delete(peerId);
@@ -55,12 +64,13 @@ export function useWebRTC(roomId: string) {
     [syncRemoteStreams]
   );
 
+  // isOfferer: the peer who sent the offer is responsible for ICE restarts
   const makePC = useCallback(
-    (peerId: string): RTCPeerConnection => {
+    (peerId: string, isOfferer = false): RTCPeerConnection => {
       const existing = pcsRef.current.get(peerId);
       if (existing) return existing;
 
-      const pc = new RTCPeerConnection(ICE_CONFIG);
+      const pc = new RTCPeerConnection({ iceServers: iceServersRef.current });
       pcsRef.current.set(peerId, pc);
 
       localStreamRef.current
@@ -71,8 +81,7 @@ export function useWebRTC(roomId: string) {
         const stream =
           streams[0] ??
           (() => {
-            const s =
-              remoteStreamsMapRef.current.get(peerId) ?? new MediaStream();
+            const s = remoteStreamsMapRef.current.get(peerId) ?? new MediaStream();
             s.addTrack(track);
             return s;
           })();
@@ -93,13 +102,51 @@ export function useWebRTC(roomId: string) {
       };
 
       pc.onconnectionstatechange = () => {
-        if (
-          pc.connectionState === "failed" ||
-          pc.connectionState === "closed"
-        ) {
+        if (pc.connectionState === "failed" || pc.connectionState === "closed") {
           removePeer(peerId);
         }
       };
+
+      // ICE restart — only the offerer re-initiates to avoid glare
+      if (isOfferer) {
+        const restartIce = async () => {
+          if (wsRef.current?.readyState !== WebSocket.OPEN) return;
+          try {
+            const offer = await pc.createOffer({ iceRestart: true });
+            await pc.setLocalDescription(offer);
+            wsRef.current.send(
+              JSON.stringify({ type: "offer_to", target: peerId, sdp: offer.sdp })
+            );
+          } catch {
+            // PC may have been closed
+          }
+        };
+
+        pc.oniceconnectionstatechange = () => {
+          if (pc.iceConnectionState === "failed") {
+            clearTimeout(iceRestartTimersRef.current.get(peerId));
+            iceRestartTimersRef.current.delete(peerId);
+            void restartIce();
+          } else if (pc.iceConnectionState === "disconnected") {
+            // Wait 5 s in case it self-recovers before forcing a restart
+            const t = setTimeout(() => {
+              if (
+                pc.iceConnectionState === "disconnected" ||
+                pc.iceConnectionState === "failed"
+              ) {
+                void restartIce();
+              }
+            }, 5000);
+            iceRestartTimersRef.current.set(peerId, t);
+          } else if (
+            pc.iceConnectionState === "connected" ||
+            pc.iceConnectionState === "completed"
+          ) {
+            clearTimeout(iceRestartTimersRef.current.get(peerId));
+            iceRestartTimersRef.current.delete(peerId);
+          }
+        };
+      }
 
       return pc;
     },
@@ -137,7 +184,10 @@ export function useWebRTC(roomId: string) {
     if (!localStreamRef.current || isScreenSharing) return;
 
     try {
-      const screenStream = await navigator.mediaDevices.getDisplayMedia({ video: true, audio: false });
+      const screenStream = await navigator.mediaDevices.getDisplayMedia({
+        video: true,
+        audio: false,
+      });
       const screenTrack = screenStream.getVideoTracks()[0];
       if (!screenTrack) return;
 
@@ -167,9 +217,27 @@ export function useWebRTC(roomId: string) {
     }
   }, [isScreenSharing, stopScreenShare]);
 
+  const toggleMic = useCallback(() => {
+    const stream = localStreamRef.current;
+    if (!stream) return;
+    const enabled = !isMuted;
+    stream.getAudioTracks().forEach((t) => { t.enabled = enabled; });
+    setIsMuted(!isMuted);
+  }, [isMuted]);
+
+  const toggleCamera = useCallback(() => {
+    const stream = localStreamRef.current;
+    if (!stream) return;
+    const enabled = !isCameraOff;
+    stream.getVideoTracks().forEach((t) => { t.enabled = enabled; });
+    setIsCameraOff(!isCameraOff);
+  }, [isCameraOff]);
+
   const disconnect = useCallback(() => {
     wsRef.current?.close();
     wsRef.current = null;
+    iceRestartTimersRef.current.forEach((t) => clearTimeout(t));
+    iceRestartTimersRef.current.clear();
     pcsRef.current.forEach((pc) => pc.close());
     pcsRef.current.clear();
     screenTrackRef.current?.stop();
@@ -180,6 +248,8 @@ export function useWebRTC(roomId: string) {
     remoteStreamsMapRef.current.clear();
     setConnected(false);
     setIsScreenSharing(false);
+    setIsMuted(false);
+    setIsCameraOff(false);
     setLocalStream(null);
     setRemoteStreams([]);
   }, []);
@@ -190,6 +260,8 @@ export function useWebRTC(roomId: string) {
       wsRef.current.close();
       wsRef.current = null;
     }
+    iceRestartTimersRef.current.forEach((t) => clearTimeout(t));
+    iceRestartTimersRef.current.clear();
     pcsRef.current.forEach((pc) => pc.close());
     pcsRef.current.clear();
     remoteStreamsMapRef.current.clear();
@@ -198,6 +270,18 @@ export function useWebRTC(roomId: string) {
     setRemoteStreams([]);
 
     try {
+      // Fetch ICE config (STUN + ephemeral TURN credentials) from server
+      try {
+        const { data } = await iceConfigApi.get();
+        iceServersRef.current = data.ice_servers.map((s) => ({
+          urls: s.urls,
+          ...(s.username ? { username: s.username } : {}),
+          ...(s.credential ? { credential: s.credential } : {}),
+        }));
+      } catch {
+        iceServersRef.current = FALLBACK_ICE_SERVERS;
+      }
+
       const stream = await navigator.mediaDevices.getUserMedia({
         video: true,
         audio: true,
@@ -223,54 +307,40 @@ export function useWebRTC(roomId: string) {
             setConnected(true);
             break;
 
-          // This peer was already in the room before us — they'll initiate to us
           case "existing_peer":
             break;
 
-          // A new peer just joined — we initiate the offer to them
+          // New peer joined — WE initiate (isOfferer = true → we handle ICE restarts)
           case "peer_joined": {
             if (!msg.peer_id) break;
-            const pc = makePC(msg.peer_id);
+            const pc = makePC(msg.peer_id, true);
             const offer = await pc.createOffer();
             await pc.setLocalDescription(offer);
             ws.send(
-              JSON.stringify({
-                type: "offer_to",
-                target: msg.peer_id,
-                sdp: offer.sdp,
-              })
+              JSON.stringify({ type: "offer_to", target: msg.peer_id, sdp: offer.sdp })
             );
             break;
           }
 
-          // Incoming offer — create and send an answer
           case "offer_from": {
             if (!msg.from_peer || !msg.sdp) break;
-            const pc = makePC(msg.from_peer);
+            const pc = makePC(msg.from_peer, false);
             await pc.setRemoteDescription({ type: "offer", sdp: msg.sdp });
             const answer = await pc.createAnswer();
             await pc.setLocalDescription(answer);
             ws.send(
-              JSON.stringify({
-                type: "answer_to",
-                target: msg.from_peer,
-                sdp: answer.sdp,
-              })
+              JSON.stringify({ type: "answer_to", target: msg.from_peer, sdp: answer.sdp })
             );
             break;
           }
 
-          // Answer to our offer
           case "answer_from": {
             if (!msg.from_peer || !msg.sdp) break;
             const pc = pcsRef.current.get(msg.from_peer);
-            if (pc) {
-              await pc.setRemoteDescription({ type: "answer", sdp: msg.sdp });
-            }
+            if (pc) await pc.setRemoteDescription({ type: "answer", sdp: msg.sdp });
             break;
           }
 
-          // ICE candidate from a peer
           case "ice_candidate_from": {
             if (!msg.from_peer || !msg.candidate) break;
             const pc = pcsRef.current.get(msg.from_peer);
@@ -304,5 +374,19 @@ export function useWebRTC(roomId: string) {
 
   useEffect(() => () => { disconnect(); }, [disconnect]);
 
-  return { localStream, remoteStreams, connected, isScreenSharing, error, connect, disconnect, startScreenShare, stopScreenShare };
+  return {
+    localStream,
+    remoteStreams,
+    connected,
+    isScreenSharing,
+    isMuted,
+    isCameraOff,
+    error,
+    connect,
+    disconnect,
+    toggleMic,
+    toggleCamera,
+    startScreenShare,
+    stopScreenShare,
+  };
 }

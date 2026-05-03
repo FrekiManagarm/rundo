@@ -1,6 +1,7 @@
 pub mod auth;
 pub mod config;
 pub mod error;
+pub mod ice;
 pub mod rooms;
 pub mod signaling;
 pub mod state;
@@ -30,6 +31,7 @@ async fn build_state(config: config::Config) -> anyhow::Result<AppState> {
 pub fn build_router(state: AppState) -> Router {
     Router::new()
         .route("/health", get(health_handler))
+        .route("/ice-config", get(ice::handler))
         .nest("/auth", auth::router())
         .nest("/rooms", rooms::router())
         .with_state(state)
