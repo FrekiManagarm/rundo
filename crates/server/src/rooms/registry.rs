@@ -13,6 +13,7 @@ use shared::models::PeerId;
 
 #[derive(Debug)]
 pub enum RoomCommand {
+    /// New peer is joining — no offer needed; server will send one.
     PeerJoined {
         peer_id: PeerId,
         info: PeerInfo,
@@ -21,9 +22,20 @@ pub enum RoomCommand {
     PeerLeft {
         peer_id: PeerId,
     },
-    Relay {
-        to: PeerId,
-        msg: ServerMessage,
+    /// Browser's SDP answer to the server's offer.
+    PeerAnswer {
+        peer_id: PeerId,
+        sdp: String,
+    },
+    /// Trickle ICE candidate from the browser.
+    PeerIceCandidate {
+        peer_id: PeerId,
+        candidate: String,
+    },
+    BroadcastChat {
+        from_peer: PeerId,
+        text: String,
+        timestamp_ms: i64,
     },
 }
 

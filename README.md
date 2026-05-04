@@ -31,6 +31,7 @@ Browser A ──WebSocket──► Rust signaling server ◄──WebSocket─�
 - Create rooms of type **conference** (everyone talks) or **stream** (broadcast-style)
 - Full mesh WebRTC: each participant connects directly to every other participant
 - Screen sharing: replace your camera feed with a screen capture, restore it on stop
+- In-room text chat: send messages to all participants via the signaling WebSocket; the server timestamps and broadcasts each message
 - Live peer count visible on the rooms list
 - SQLite out of the box — swap to PostgreSQL for production with a single env var
 
@@ -122,6 +123,7 @@ Connect to `ws://localhost:4000/rooms/:id/join?token=<jwt>`.
 | `offer_from` | `{ from_peer, sdp }` | Incoming WebRTC offer |
 | `answer_from` | `{ from_peer, sdp }` | Incoming WebRTC answer |
 | `ice_candidate_from` | `{ from_peer, candidate }` | Incoming ICE candidate |
+| `chat_from` | `{ from_peer, text, timestamp_ms }` | A chat message from another peer; `timestamp_ms` is a Unix timestamp set by the server |
 | `error` | `{ reason }` | Something went wrong |
 
 ### Messages sent by the client
@@ -132,6 +134,7 @@ Connect to `ws://localhost:4000/rooms/:id/join?token=<jwt>`.
 | `offer_to` | `{ target, sdp }` | Send a WebRTC offer to a peer |
 | `answer_to` | `{ target, sdp }` | Send a WebRTC answer to a peer |
 | `ice_candidate_to` | `{ target, candidate }` | Send an ICE candidate to a peer |
+| `chat_message` | `{ text }` | Send a chat message; the server broadcasts it to all other peers in the room |
 
 ## Project structure
 

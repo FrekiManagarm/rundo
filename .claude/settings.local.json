@@ -16,7 +16,14 @@
       "Bash(DATABASE_URL=\"sqlite:rundo.db\" cargo run -p server)",
       "Bash(kill %1)",
       "Bash(wait)",
-      "Bash(DATABASE_URL=\"sqlite://rundo.db\" cargo run -p server)"
+      "Bash(DATABASE_URL=\"sqlite://rundo.db\" cargo run -p server)",
+      "Bash(cargo check *)",
+      "WebFetch(domain:github.com)",
+      "WebSearch",
+      "WebFetch(domain:docs.rs)",
+      "Bash(npx next *)",
+      "mcp__plugin_context7_context7__resolve-library-id",
+      "mcp__plugin_context7_context7__query-docs"
     ]
   },
   "enabledMcpjsonServers": [

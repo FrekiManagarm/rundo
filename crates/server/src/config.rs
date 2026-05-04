@@ -3,6 +3,8 @@ pub struct Config {
     pub http_port: u16,
     pub jwt_secret: String,
     pub database_url: String,
+    /// Public IP advertised in ICE candidates (set SERVER_ADDR env var for production).
+    pub server_addr: String,
     /// Comma-separated STUN URLs (default: Google STUN).
     pub stun_urls: Vec<String>,
     /// Comma-separated TURN/TURNS URLs (empty = no TURN).
@@ -24,6 +26,8 @@ impl Config {
                 .unwrap_or_else(|_| "dev-secret-change-in-prod".to_string()),
             database_url: std::env::var("DATABASE_URL")
                 .unwrap_or_else(|_| "sqlite://rundo.db".to_string()),
+            server_addr: std::env::var("SERVER_ADDR")
+                .unwrap_or_else(|_| "127.0.0.1".to_string()),
             stun_urls: std::env::var("STUN_URLS")
                 .unwrap_or_else(|_| "stun:stun.l.google.com:19302".to_string())
                 .split(',')

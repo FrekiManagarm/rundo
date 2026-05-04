@@ -1,0 +1,42 @@
+{
+  "version": 1,
+  "updatedAt": 1777841430797,
+  "nodeCount": 4,
+  "nodes": {
+    "mem-MEMORY-memory-index": {
+      "id": "mem-MEMORY-memory-index",
+      "category": "core",
+      "confidence": 0.5,
+      "accessCount": 0,
+      "createdAt": 1777841430793
+    },
+    "mem-feedback_nextjs_docs----": {
+      "id": "mem-feedback_nextjs_docs----",
+      "category": "feedback_nextjs_docs",
+      "confidence": 0.5,
+      "accessCount": 0,
+      "createdAt": 1777841430794
+    },
+    "mem-MEMORY-feedback": {
+      "id": "mem-MEMORY-feedback",
+      "category": "core",
+      "confidence": 0.5,
+      "accessCount": 0,
+      "createdAt": 1777841430795
+    },
+    "mem-feedback_tailwind_only----": {
+      "id": "mem-feedback_tailwind_only----",
+      "category": "feedback_tailwind_only",
+      "confidence": 0.5,
+      "accessCount": 0,
+      "createdAt": 1777841430795
+    }
+  },
+  "edges": [],
+  "pageRanks": {
+    "mem-MEMORY-memory-index": 0.25,
+    "mem-feedback_nextjs_docs----": 0.25,
+    "mem-MEMORY-feedback": 0.25,
+    "mem-feedback_tailwind_only----": 0.25
+  }
+}

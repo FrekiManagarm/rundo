@@ -28,7 +28,8 @@ pub async fn ws_handler(
         None => {
             let (tx, rx) = tokio::sync::mpsc::channel(256);
             let peer_counter = state.registry.insert(room, tx.clone());
-            tokio::spawn(crate::rooms::room::run_room(room_id, rx, peer_counter));
+            let server_addr = state.config.server_addr.clone();
+            tokio::spawn(crate::rooms::room::run_room(room_id, rx, peer_counter, server_addr));
             tx
         }
     };

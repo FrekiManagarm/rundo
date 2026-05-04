@@ -5,6 +5,7 @@ use shared::{
     messages::{ClientMessage, ServerMessage},
     models::{PeerId, PeerInfo, RoomId, UserId},
 };
+use std::time::{SystemTime, UNIX_EPOCH};
 use tokio::sync::mpsc;
 
 use crate::rooms::registry::RoomCommand;
@@ -19,10 +20,6 @@ pub async fn run_session(
     let (mut ws_tx, mut ws_rx) = socket.split();
     let (server_msg_tx, mut server_msg_rx) = mpsc::channel::<ServerMessage>(256);
 
-    if send_msg(&mut ws_tx, &ServerMessage::Joined { peer_id }).await.is_err() {
-        return;
-    }
-
     let peer_info = PeerInfo { peer_id, user_id, connected_at: Utc::now() };
     let _ = room_cmd_tx
         .send(RoomCommand::PeerJoined { peer_id, info: peer_info, ws_tx: server_msg_tx })
@@ -34,27 +31,22 @@ pub async fn run_session(
                 match msg {
                     Some(Ok(Message::Text(text))) => {
                         match serde_json::from_str::<ClientMessage>(&text) {
-                            Ok(ClientMessage::Leave) => break,
-                            Ok(ClientMessage::OfferTo { target, sdp }) => {
-                                let _ = room_cmd_tx.send(RoomCommand::Relay {
-                                    to: target,
-                                    msg: ServerMessage::OfferFrom { from_peer: peer_id, sdp },
-                                }).await;
+                            Ok(ClientMessage::Answer { sdp }) => {
+                                let _ = room_cmd_tx.send(RoomCommand::PeerAnswer { peer_id, sdp }).await;
                             }
-                            Ok(ClientMessage::AnswerTo { target, sdp }) => {
-                                let _ = room_cmd_tx.send(RoomCommand::Relay {
-                                    to: target,
-                                    msg: ServerMessage::AnswerFrom { from_peer: peer_id, sdp },
-                                }).await;
+                            Ok(ClientMessage::IceCandidate { candidate }) => {
+                                let _ = room_cmd_tx
+                                    .send(RoomCommand::PeerIceCandidate { peer_id, candidate })
+                                    .await;
                             }
-                            Ok(ClientMessage::IceCandidateTo { target, candidate }) => {
-                                let _ = room_cmd_tx.send(RoomCommand::Relay {
-                                    to: target,
-                                    msg: ServerMessage::IceCandidateFrom {
-                                        from_peer: peer_id,
-                                        candidate,
-                                    },
-                                }).await;
+                            Ok(ClientMessage::ChatMessage { text }) => {
+                                let timestamp_ms = SystemTime::now()
+                                    .duration_since(UNIX_EPOCH)
+                                    .unwrap_or_default()
+                                    .as_millis() as i64;
+                                let _ = room_cmd_tx
+                                    .send(RoomCommand::BroadcastChat { from_peer: peer_id, text, timestamp_ms })
+                                    .await;
                             }
                             Err(e) => tracing::debug!("peer {peer_id:?} parse error: {e}"),
                         }
@@ -64,7 +56,11 @@ pub async fn run_session(
                 }
             }
             Some(server_msg) = server_msg_rx.recv() => {
-                if send_msg(&mut ws_tx, &server_msg).await.is_err() {
+                let json = match serde_json::to_string(&server_msg) {
+                    Ok(j) => j,
+                    Err(_) => continue,
+                };
+                if ws_tx.send(Message::Text(json.into())).await.is_err() {
                     break;
                 }
             }
@@ -72,13 +68,4 @@ pub async fn run_session(
     }
 
     let _ = room_cmd_tx.send(RoomCommand::PeerLeft { peer_id }).await;
-}
-
-async fn send_msg(
-    tx: &mut futures_util::stream::SplitSink<WebSocket, Message>,
-    msg: &ServerMessage,
-) -> anyhow::Result<()> {
-    let json = serde_json::to_string(msg)?;
-    tx.send(Message::Text(json.into())).await?;
-    Ok(())
 }

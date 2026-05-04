@@ -3,8 +3,7 @@ use serde_json::{json, Value};
 use server::{build_router, config::Config, state::AppState, store::memory::InMemoryStore};
 
 async fn test_server() -> TestServer {
-    let mut config = Config::from_env();
-    config.udp_media_port = 0;
+    let config = Config::from_env();
     let state = AppState::new(config, InMemoryStore::default())
         .await
         .expect("AppState");

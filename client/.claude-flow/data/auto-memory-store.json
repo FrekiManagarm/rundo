@@ -1,0 +1,54 @@
+[
+  {
+    "id": "mem-MEMORY-memory-index",
+    "key": "memory-index",
+    "content": "- [Always refer to Next.js docs](feedback_nextjs_docs.md) — Use context7/explore-docs for any Next.js API before implementing",
+    "summary": "Memory Index",
+    "namespace": "core",
+    "type": "semantic",
+    "metadata": {
+      "sourceFile": "/Users/mathieuchambaud/.claude/projects/-Users-mathieuchambaud-Documents-Perso-Projects-dunlo/memory/MEMORY.md",
+      "bootstrapped": true
+    },
+    "createdAt": 1777841430793
+  },
+  {
+    "id": "mem-feedback_nextjs_docs----",
+    "key": "-",
+    "content": "name: Always refer to Next.js docs\ndescription: User wants Next.js documentation consulted via context7 for any Next.js-related work\ntype: feedback\noriginSessionId: 7b403205-2477-4c57-9b14-f8c699a1cf4d\n---\nAlways use the `explore-docs` agent (context7) to look up the Next.js documentation before implementing Next.js features (routing, metadata, middleware, caching, server actions, etc.).\n\n**Why:** User explicitly requested this to ensure implementations follow current Next.js APIs and patterns.\n",
+    "summary": "---",
+    "namespace": "feedback_nextjs_docs",
+    "type": "semantic",
+    "metadata": {
+      "sourceFile": "/Users/mathieuchambaud/.claude/projects/-Users-mathieuchambaud-Documents-Perso-Projects-dunlo/memory/feedback_nextjs_docs.md",
+      "bootstrapped": true
+    },
+    "createdAt": 1777841430794
+  },
+  {
+    "id": "mem-MEMORY-feedback",
+    "key": "feedback",
+    "content": "- [No inline CSS — Tailwind only](feedback_tailwind_only.md) — All styling must use Tailwind classes; custom CSS goes in globals.css @layer utilities",
+    "summary": "Feedback",
+    "namespace": "core",
+    "type": "semantic",
+    "metadata": {
+      "sourceFile": "/Users/mathieuchambaud/.claude/projects/-Users-mathieuchambaud-Documents-Perso-Projects-pinterest-dashboard/memory/MEMORY.md",
+      "bootstrapped": true
+    },
+    "createdAt": 1777841430795
+  },
+  {
+    "id": "mem-feedback_tailwind_only----",
+    "key": "-",
+    "content": "name: No inline CSS — Tailwind only\ndescription: User requires all styling via Tailwind CSS classes; no inline style= or style tags\ntype: feedback\n---\n\nNever use inline `style={}` props or `<style>` tags in JSX/TSX. All styling must use Tailwind CSS utility classes.\n\nFor effects that Tailwind doesn't cover natively (custom keyframes, -webkit-text-stroke, radial gradients as background-image), add them to `app/globals.css` under `@layer utilities` or as top-level `@keyframes`.\n\n**Why:** User expl",
+    "summary": "---",
+    "namespace": "feedback_tailwind_only",
+    "type": "semantic",
+    "metadata": {
+      "sourceFile": "/Users/mathieuchambaud/.claude/projects/-Users-mathieuchambaud-Documents-Perso-Projects-pinterest-dashboard/memory/feedback_tailwind_only.md",
+      "bootstrapped": true
+    },
+    "createdAt": 1777841430795
+  }
+]

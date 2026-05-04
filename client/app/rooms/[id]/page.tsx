@@ -6,8 +6,20 @@ import { storage } from "@/lib/storage";
 import { roomsApi } from "@/lib/api";
 import { useWebRTC } from "@/hooks/useWebRTC";
 import { VideoGrid } from "@/components/VideoGrid";
+import { ChatPanel } from "@/components/ChatPanel";
 import { Button } from "@/components/ui/button";
-import { ChevronLeft, Mic, MicOff, Monitor, MonitorOff, Video, VideoOff, Camera, CameraOff } from "lucide-react";
+import {
+  ChevronLeft,
+  Mic,
+  MicOff,
+  Monitor,
+  MonitorOff,
+  Video,
+  VideoOff,
+  Camera,
+  CameraOff,
+  MessageSquare,
+} from "lucide-react";
 
 interface PageProps {
   params: Promise<{ id: string }>;
@@ -17,8 +29,24 @@ export default function RoomPage({ params }: PageProps) {
   const { id: roomId } = use(params);
   const router = useRouter();
   const [roomError, setRoomError] = useState<string | null>(null);
-  const { localStream, remoteStreams, connected, isScreenSharing, isMuted, isCameraOff, error, connect, disconnect, toggleMic, toggleCamera, startScreenShare, stopScreenShare } =
-    useWebRTC(roomId);
+  const [chatOpen, setChatOpen] = useState(false);
+  const {
+    localStream,
+    remoteStreams,
+    connected,
+    isScreenSharing,
+    isMuted,
+    isCameraOff,
+    messages,
+    error,
+    connect,
+    disconnect,
+    toggleMic,
+    toggleCamera,
+    sendMessage,
+    startScreenShare,
+    stopScreenShare,
+  } = useWebRTC(roomId);
 
   useEffect(() => {
     if (!storage.getToken()) {
@@ -136,6 +164,22 @@ export default function RoomPage({ params }: PageProps) {
               </Button>
             </>
           )}
+
+          <Button
+            variant={chatOpen ? "secondary" : "ghost"}
+            size="sm"
+            onClick={() => setChatOpen((v) => !v)}
+            className="gap-2 relative"
+          >
+            <MessageSquare className="w-3.5 h-3.5" />
+            Chat
+            {messages.length > 0 && !chatOpen && (
+              <span className="absolute -top-1 -right-1 w-4 h-4 rounded-full bg-primary text-[9px] font-bold text-primary-foreground flex items-center justify-center">
+                {messages.length > 9 ? "9+" : messages.length}
+              </span>
+            )}
+          </Button>
+
           <Button
             variant="ghost"
             size="sm"
@@ -156,8 +200,20 @@ export default function RoomPage({ params }: PageProps) {
         </div>
       )}
 
-      <div className="flex-1 p-5">
-        <VideoGrid localStream={localStream} remoteStreams={remoteStreams} isScreenSharing={isScreenSharing} />
+      <div className="flex flex-1 overflow-hidden">
+        <div className={`flex-1 p-5 ${chatOpen ? "min-w-0" : ""}`}>
+          <VideoGrid
+            localStream={localStream}
+            remoteStreams={remoteStreams}
+            isScreenSharing={isScreenSharing}
+          />
+        </div>
+
+        {chatOpen && (
+          <div className="w-80 flex-shrink-0 flex flex-col" style={{ height: "calc(100vh - 57px)" }}>
+            <ChatPanel messages={messages} onSend={sendMessage} />
+          </div>
+        )}
       </div>
     </div>
   );

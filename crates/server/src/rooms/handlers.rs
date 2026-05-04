@@ -59,7 +59,8 @@ pub async fn create_room(
 
     let (cmd_tx, cmd_rx) = tokio::sync::mpsc::channel(256);
     let peer_counter = state.registry.insert(room.clone(), cmd_tx);
-    tokio::spawn(crate::rooms::room::run_room(room.id, cmd_rx, peer_counter));
+    let server_addr = state.config.server_addr.clone();
+    tokio::spawn(crate::rooms::room::run_room(room.id, cmd_rx, peer_counter, server_addr));
 
     Ok((StatusCode::CREATED, Json(RoomResponse::from_room(room, 0))))
 }

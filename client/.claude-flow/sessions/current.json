@@ -1,0 +1,12 @@
+{
+  "id": "session-1777841430789",
+  "startedAt": "2026-05-03T20:50:30.789Z",
+  "cwd": "/Users/mathieuchambaud/Documents/Perso-Projects/rundo/client",
+  "context": {},
+  "metrics": {
+    "edits": 2,
+    "commands": 0,
+    "tasks": 0,
+    "errors": 0
+  }
+}

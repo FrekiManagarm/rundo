@@ -10,13 +10,12 @@ const FALLBACK_ICE_SERVERS: RTCIceServer[] = [
   { urls: "stun:stun.l.google.com:19302" },
 ];
 
-interface ServerMessage {
-  type: string;
-  peer_id?: string;
-  from_peer?: string;
-  sdp?: string;
-  candidate?: string;
-  reason?: string;
+export interface ChatMessage {
+  id: string;
+  peerId: string;
+  text: string;
+  timestampMs: number;
+  isLocal: boolean;
 }
 
 export interface RemoteStream {
@@ -29,11 +28,12 @@ export function useWebRTC(roomId: string) {
   const localStreamRef = useRef<MediaStream | null>(null);
   const cameraTrackRef = useRef<MediaStreamTrack | null>(null);
   const screenTrackRef = useRef<MediaStreamTrack | null>(null);
-  const pcsRef = useRef<Map<string, RTCPeerConnection>>(new Map());
+  // Single RTCPeerConnection to the SFU server
+  const pcRef = useRef<RTCPeerConnection | null>(null);
   const remoteStreamsMapRef = useRef<Map<string, MediaStream>>(new Map());
   const iceServersRef = useRef<RTCIceServer[]>(FALLBACK_ICE_SERVERS);
-  // Timers for delayed ICE restart on "disconnected" state
-  const iceRestartTimersRef = useRef<Map<string, ReturnType<typeof setTimeout>>>(new Map());
+  const localPeerIdRef = useRef<string | null>(null);
+  const pendingRemoteCandidates = useRef<RTCIceCandidateInit[]>([]);
 
   const [localStream, setLocalStream] = useState<MediaStream | null>(null);
   const [remoteStreams, setRemoteStreams] = useState<RemoteStream[]>([]);
@@ -41,6 +41,7 @@ export function useWebRTC(roomId: string) {
   const [isScreenSharing, setIsScreenSharing] = useState(false);
   const [isMuted, setIsMuted] = useState(false);
   const [isCameraOff, setIsCameraOff] = useState(false);
+  const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [error, setError] = useState<string | null>(null);
 
   const syncRemoteStreams = useCallback(() => {
@@ -52,106 +53,26 @@ export function useWebRTC(roomId: string) {
     );
   }, []);
 
-  const removePeer = useCallback(
-    (peerId: string) => {
-      clearTimeout(iceRestartTimersRef.current.get(peerId));
-      iceRestartTimersRef.current.delete(peerId);
-      pcsRef.current.get(peerId)?.close();
-      pcsRef.current.delete(peerId);
-      remoteStreamsMapRef.current.delete(peerId);
-      syncRemoteStreams();
-    },
-    [syncRemoteStreams]
-  );
+  // Handle incoming SDP offer from server (initial or renegotiation)
+  const handleOffer = useCallback(async (sdp: string) => {
+    const pc = pcRef.current;
+    const ws = wsRef.current;
+    if (!pc || !ws) return;
 
-  // isOfferer: the peer who sent the offer is responsible for ICE restarts
-  const makePC = useCallback(
-    (peerId: string, isOfferer = false): RTCPeerConnection => {
-      const existing = pcsRef.current.get(peerId);
-      if (existing) return existing;
-
-      const pc = new RTCPeerConnection({ iceServers: iceServersRef.current });
-      pcsRef.current.set(peerId, pc);
-
-      localStreamRef.current
-        ?.getTracks()
-        .forEach((t) => pc.addTrack(t, localStreamRef.current!));
-
-      pc.ontrack = ({ streams, track }) => {
-        const stream =
-          streams[0] ??
-          (() => {
-            const s = remoteStreamsMapRef.current.get(peerId) ?? new MediaStream();
-            s.addTrack(track);
-            return s;
-          })();
-        remoteStreamsMapRef.current.set(peerId, stream);
-        syncRemoteStreams();
-      };
-
-      pc.onicecandidate = ({ candidate }) => {
-        if (candidate && wsRef.current?.readyState === WebSocket.OPEN) {
-          wsRef.current.send(
-            JSON.stringify({
-              type: "ice_candidate_to",
-              target: peerId,
-              candidate: JSON.stringify(candidate),
-            })
-          );
-        }
-      };
-
-      pc.onconnectionstatechange = () => {
-        if (pc.connectionState === "failed" || pc.connectionState === "closed") {
-          removePeer(peerId);
-        }
-      };
-
-      // ICE restart — only the offerer re-initiates to avoid glare
-      if (isOfferer) {
-        const restartIce = async () => {
-          if (wsRef.current?.readyState !== WebSocket.OPEN) return;
-          try {
-            const offer = await pc.createOffer({ iceRestart: true });
-            await pc.setLocalDescription(offer);
-            wsRef.current.send(
-              JSON.stringify({ type: "offer_to", target: peerId, sdp: offer.sdp })
-            );
-          } catch {
-            // PC may have been closed
-          }
-        };
-
-        pc.oniceconnectionstatechange = () => {
-          if (pc.iceConnectionState === "failed") {
-            clearTimeout(iceRestartTimersRef.current.get(peerId));
-            iceRestartTimersRef.current.delete(peerId);
-            void restartIce();
-          } else if (pc.iceConnectionState === "disconnected") {
-            // Wait 5 s in case it self-recovers before forcing a restart
-            const t = setTimeout(() => {
-              if (
-                pc.iceConnectionState === "disconnected" ||
-                pc.iceConnectionState === "failed"
-              ) {
-                void restartIce();
-              }
-            }, 5000);
-            iceRestartTimersRef.current.set(peerId, t);
-          } else if (
-            pc.iceConnectionState === "connected" ||
-            pc.iceConnectionState === "completed"
-          ) {
-            clearTimeout(iceRestartTimersRef.current.get(peerId));
-            iceRestartTimersRef.current.delete(peerId);
-          }
-        };
+    try {
+      await pc.setRemoteDescription({ type: "offer", sdp });
+      const buffered = pendingRemoteCandidates.current.splice(0);
+      for (const c of buffered) {
+        pc.addIceCandidate(c).catch(() => {});
       }
-
-      return pc;
-    },
-    [syncRemoteStreams, removePeer]
-  );
+      const answer = await pc.createAnswer();
+      await pc.setLocalDescription(answer);
+      ws.send(JSON.stringify({ type: "answer", sdp: answer.sdp }));
+    } catch (err) {
+      console.error("[SFU] handleOffer failed:", err, "\nSDP:", sdp);
+      setError(`SDP negotiation failed: ${err}`);
+    }
+  }, []);
 
   const stopScreenShare = useCallback(() => {
     const screenTrack = screenTrackRef.current;
@@ -168,10 +89,8 @@ export function useWebRTC(roomId: string) {
       const cameraTrack = cameraTrackRef.current;
       if (cameraTrack && cameraTrack.readyState === "live") {
         stream.addTrack(cameraTrack);
-        pcsRef.current.forEach((pc) => {
-          const sender = pc.getSenders().find((s) => s.track?.kind === "video");
-          if (sender) sender.replaceTrack(cameraTrack);
-        });
+        const sender = pcRef.current?.getSenders().find((s) => s.track?.kind === "video");
+        if (sender) sender.replaceTrack(cameraTrack);
       }
 
       setLocalStream(new MediaStream(stream.getTracks()));
@@ -201,10 +120,8 @@ export function useWebRTC(roomId: string) {
       stream.addTrack(screenTrack);
       screenTrackRef.current = screenTrack;
 
-      pcsRef.current.forEach((pc) => {
-        const sender = pc.getSenders().find((s) => s.track?.kind === "video");
-        if (sender) sender.replaceTrack(screenTrack);
-      });
+      const sender = pcRef.current?.getSenders().find((s) => s.track?.kind === "video");
+      if (sender) sender.replaceTrack(screenTrack);
 
       setLocalStream(new MediaStream(stream.getTracks()));
       setIsScreenSharing(true);
@@ -220,38 +137,54 @@ export function useWebRTC(roomId: string) {
   const toggleMic = useCallback(() => {
     const stream = localStreamRef.current;
     if (!stream) return;
-    const enabled = !isMuted;
-    stream.getAudioTracks().forEach((t) => { t.enabled = enabled; });
-    setIsMuted(!isMuted);
+    const newMuted = !isMuted;
+    stream.getAudioTracks().forEach((t) => { t.enabled = !newMuted; });
+    setIsMuted(newMuted);
   }, [isMuted]);
 
   const toggleCamera = useCallback(() => {
     const stream = localStreamRef.current;
     if (!stream) return;
-    const enabled = !isCameraOff;
-    stream.getVideoTracks().forEach((t) => { t.enabled = enabled; });
-    setIsCameraOff(!isCameraOff);
+    const newCameraOff = !isCameraOff;
+    stream.getVideoTracks().forEach((t) => { t.enabled = !newCameraOff; });
+    setIsCameraOff(newCameraOff);
   }, [isCameraOff]);
+
+  const sendMessage = useCallback((text: string) => {
+    const ws = wsRef.current;
+    if (!ws || ws.readyState !== WebSocket.OPEN || !text.trim()) return;
+    ws.send(JSON.stringify({ type: "chat_message", text: text.trim() }));
+    setMessages((prev) => [
+      ...prev,
+      {
+        id: `${Date.now()}-local`,
+        peerId: localPeerIdRef.current ?? "me",
+        text: text.trim(),
+        timestampMs: Date.now(),
+        isLocal: true,
+      },
+    ]);
+  }, []);
 
   const disconnect = useCallback(() => {
     wsRef.current?.close();
     wsRef.current = null;
-    iceRestartTimersRef.current.forEach((t) => clearTimeout(t));
-    iceRestartTimersRef.current.clear();
-    pcsRef.current.forEach((pc) => pc.close());
-    pcsRef.current.clear();
+    pcRef.current?.close();
+    pcRef.current = null;
     screenTrackRef.current?.stop();
     screenTrackRef.current = null;
     cameraTrackRef.current = null;
     localStreamRef.current?.getTracks().forEach((t) => t.stop());
     localStreamRef.current = null;
     remoteStreamsMapRef.current.clear();
+    localPeerIdRef.current = null;
     setConnected(false);
     setIsScreenSharing(false);
     setIsMuted(false);
     setIsCameraOff(false);
     setLocalStream(null);
     setRemoteStreams([]);
+    setMessages([]);
   }, []);
 
   const connect = useCallback(async () => {
@@ -260,17 +193,14 @@ export function useWebRTC(roomId: string) {
       wsRef.current.close();
       wsRef.current = null;
     }
-    iceRestartTimersRef.current.forEach((t) => clearTimeout(t));
-    iceRestartTimersRef.current.clear();
-    pcsRef.current.forEach((pc) => pc.close());
-    pcsRef.current.clear();
+    pcRef.current?.close();
+    pcRef.current = null;
     remoteStreamsMapRef.current.clear();
     setConnected(false);
     setError(null);
     setRemoteStreams([]);
 
     try {
-      // Fetch ICE config (STUN + ephemeral TURN credentials) from server
       try {
         const { data } = await iceConfigApi.get();
         iceServersRef.current = data.ice_servers.map((s) => ({
@@ -296,81 +226,137 @@ export function useWebRTC(roomId: string) {
         return;
       }
 
+      // Single PC to the SFU server
+      const pc = new RTCPeerConnection({ iceServers: iceServersRef.current });
+      pcRef.current = pc;
+
+      // Add local tracks so the server receives our audio+video
+      stream.getTracks().forEach((t) => pc.addTrack(t, stream));
+
+      // Remote tracks arrive here — stream.id equals the sender's peer_id (set by server via MSID)
+      pc.ontrack = ({ streams, track }) => {
+        const remoteStream = streams[0];
+        if (!remoteStream) return;
+        const peerId = remoteStream.id;
+        if (!peerId) return;
+
+        const existing = remoteStreamsMapRef.current.get(peerId);
+        if (existing) {
+          if (!existing.getTracks().find((t) => t.id === track.id)) {
+            existing.addTrack(track);
+          }
+          // New MediaStream object so React detects the reference change and
+          // VideoTile re-runs its effect to re-attach srcObject + call play().
+          remoteStreamsMapRef.current.set(peerId, new MediaStream(existing.getTracks()));
+        } else {
+          remoteStreamsMapRef.current.set(peerId, remoteStream);
+        }
+        syncRemoteStreams();
+      };
+
+      pc.oniceconnectionstatechange = () => {
+        console.log("[SFU] ICE state:", pc.iceConnectionState);
+      };
+
+      // Trickle ICE candidates to the server
+      pc.onicecandidate = ({ candidate }) => {
+        if (candidate) {
+          console.log("[SFU] sending ICE candidate:", candidate.candidate);
+          if (wsRef.current?.readyState === WebSocket.OPEN) {
+            wsRef.current.send(
+              JSON.stringify({ type: "ice_candidate", candidate: candidate.candidate })
+            );
+          }
+        }
+      };
+
+      pc.onconnectionstatechange = () => {
+        console.log("[SFU] PC connection state:", pc.connectionState);
+        if (pc.connectionState === "failed") {
+          setError("WebRTC connection failed — ICE may have timed out. Try rejoining.");
+        }
+        // Do NOT set connected=false here: connected reflects the WS session,
+        // not the WebRTC media path. The WS onclose handler handles disconnection.
+      };
+
       const ws = new WebSocket(`${WS_URL}/rooms/${roomId}/join?token=${token}`);
       wsRef.current = ws;
 
       ws.onmessage = async ({ data }) => {
-        const msg: ServerMessage = JSON.parse(data);
+        const msg = JSON.parse(data as string) as Record<string, unknown>;
+        console.log("[SFU] WS message:", msg.type, msg);
 
         switch (msg.type) {
-          case "joined":
+          // Server sends its SDP offer; we answer
+          case "joined": {
+            localPeerIdRef.current = (msg.peer_id as string) ?? null;
             setConnected(true);
-            break;
-
-          case "existing_peer":
-            break;
-
-          // New peer joined — WE initiate (isOfferer = true → we handle ICE restarts)
-          case "peer_joined": {
-            if (!msg.peer_id) break;
-            const pc = makePC(msg.peer_id, true);
-            const offer = await pc.createOffer();
-            await pc.setLocalDescription(offer);
-            ws.send(
-              JSON.stringify({ type: "offer_to", target: msg.peer_id, sdp: offer.sdp })
-            );
+            if (msg.sdp) await handleOffer(msg.sdp as string);
             break;
           }
 
-          case "offer_from": {
-            if (!msg.from_peer || !msg.sdp) break;
-            const pc = makePC(msg.from_peer, false);
-            await pc.setRemoteDescription({ type: "offer", sdp: msg.sdp });
-            const answer = await pc.createAnswer();
-            await pc.setLocalDescription(answer);
-            ws.send(
-              JSON.stringify({ type: "answer_to", target: msg.from_peer, sdp: answer.sdp })
-            );
+          // Renegotiation offer when a new peer joins
+          case "offer": {
+            if (msg.sdp) await handleOffer(msg.sdp as string);
             break;
           }
 
-          case "answer_from": {
-            if (!msg.from_peer || !msg.sdp) break;
-            const pc = pcsRef.current.get(msg.from_peer);
-            if (pc) await pc.setRemoteDescription({ type: "answer", sdp: msg.sdp });
+          case "peer_joined":
+            // UI notification — tracks arrive via ontrack
             break;
-          }
 
-          case "ice_candidate_from": {
-            if (!msg.from_peer || !msg.candidate) break;
-            const pc = pcsRef.current.get(msg.from_peer);
-            if (pc) {
-              try {
-                await pc.addIceCandidate(JSON.parse(msg.candidate));
-              } catch {
-                // ignore stale candidates
-              }
+          case "peer_left": {
+            const peerId = msg.peer_id as string | undefined;
+            if (peerId) {
+              remoteStreamsMapRef.current.delete(peerId);
+              syncRemoteStreams();
             }
             break;
           }
 
-          case "peer_left":
-            if (msg.peer_id) removePeer(msg.peer_id);
+          case "ice_candidate": {
+            const candidate = msg.candidate as string | undefined;
+            if (!candidate) break;
+            const init: RTCIceCandidateInit = { candidate };
+            const pc = pcRef.current;
+            if (pc && pc.remoteDescription) {
+              pc.addIceCandidate(init).catch(() => {});
+            } else {
+              pendingRemoteCandidates.current.push(init);
+            }
             break;
+          }
+
+          case "chat_from": {
+            const fromPeer = msg.from_peer as string | undefined;
+            const text = msg.text as string | undefined;
+            if (fromPeer && text) {
+              setMessages((prev) => [
+                ...prev,
+                {
+                  id: `${msg.timestamp_ms ?? Date.now()}-${fromPeer}`,
+                  peerId: fromPeer,
+                  text,
+                  timestampMs: (msg.timestamp_ms as number) ?? Date.now(),
+                  isLocal: false,
+                },
+              ]);
+            }
+            break;
+          }
 
           case "error":
-            setError(msg.reason ?? "Unknown error");
+            setError((msg.reason as string) ?? "Unknown error");
             break;
         }
       };
 
-      ws.onerror = () =>
-        setError("WebSocket error — check console and server logs");
+      ws.onerror = () => setError("WebSocket error — check console and server logs");
       ws.onclose = () => setConnected(false);
     } catch (err) {
       setError(String(err));
     }
-  }, [roomId, makePC, removePeer]);
+  }, [roomId, handleOffer, syncRemoteStreams]);
 
   useEffect(() => () => { disconnect(); }, [disconnect]);
 
@@ -381,11 +367,13 @@ export function useWebRTC(roomId: string) {
     isScreenSharing,
     isMuted,
     isCameraOff,
+    messages,
     error,
     connect,
     disconnect,
     toggleMic,
     toggleCamera,
+    sendMessage,
     startScreenShare,
     stopScreenShare,
   };
